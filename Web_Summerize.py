@@ -1,4 +1,4 @@
-# imports
+# import Pakages
 import os
 import requests
 from dotenv import load_dotenv
@@ -47,7 +47,7 @@ def summarize_webpage(url):
     summary = summarize_text(text)
     return summary
 
-# Ask user for the URL
+# Ask user for the URL of webpage
 user_url = input("Enter the webpage URL to summarize: ").strip()
 
 try:
