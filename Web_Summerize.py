@@ -1,57 +1,73 @@
-# import
+# Imports
 import os
 import requests
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-import google.generativeai as genai
+from IPython.display import Markdown, display
+import google.generativeai as genai  # Gemini client
 
-# Load API key from .env
+# Load environment variables
 load_dotenv(override=True)
-gemini_api_key = os.getenv('GEMINI_API_KEY')
+api_key = os.getenv('GEMINI_API_KEY')
 
-if not gemini_api_key:
-    print("❌ No Gemini API key was found - please add GEMINI_API_KEY to your .env file")
-elif gemini_api_key.strip() != gemini_api_key:
-    print("⚠ API key has spaces or tabs — please fix in .env")
+# Check API key
+if not api_key:
+    print("No Gemini API key found - please check your .env file!")
 else:
-    print("✅ Gemini API key found and looks good!")
+    print("Gemini API key found!")
 
-# Configure Gemini client
-genai.configure(api_key=gemini_api_key)
+# Configure Gemini
+genai.configure(api_key=api_key)
 
-# Step 1: Fetch webpage content
-def fetch_webpage(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.text
-    else:
-        raise Exception("Failed to fetch webpage content.")
+# Headers for requests
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+}
 
-# Step 2: Extract text from HTML
-def extract_text(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
-    paragraphs = soup.find_all('p')
-    return ' '.join([para.get_text() for para in paragraphs])
+# Class to represent a website
+class Website:
+    def __init__(self, url):
+        """Extracts website title and text content using BeautifulSoup"""
+        self.url = url
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        self.title = soup.title.string if soup.title else "No title found"
+        
+        # Remove irrelevant tags
+        for irrelevant in soup.body(["script", "style", "img", "input"]):
+            irrelevant.decompose()
+        
+        self.text = soup.body.get_text(separator="\n", strip=True)
 
-# Step 3: Summarize text using Gemini API
-def summarize_text(text):
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    prompt = f"Summarize the following webpage content in 3-5 concise sentences:\n\n{text}"
-    response = model.generate_content(prompt)
-    return response.text.strip()
+# System prompt for Gemini
+system_prompt = """You are an assistant that analyzes the contents of a website 
+and provides a short summary in markdown, ignoring navigation or irrelevant text.
+"""
 
-# Main function
-def summarize_webpage(url):
-    html_content = fetch_webpage(url)
-    text = extract_text(html_content)
-    summary = summarize_text(text)
-    return summary
+# Function: Build user prompt
+def user_prompt_for(website):
+    return f"""
+You are looking at a website titled: {website.title}
 
-# Ask user for the URL of webpage
-user_url = input("Enter the webpage URL to summarize: ").strip()
+The contents of this website are as follows:
+{website.text}
 
-try:
-    print("\n--- Summary ---")
-    print(summarize_webpage(user_url))
-except Exception as e:
-    print(f"Error: {e}")
+Please provide a **short markdown summary** of this website.
+If it includes news or announcements, summarize those too.
+"""
+
+# Function: Summarize website using Gemini
+def summarize(url):
+    website = Website(url)
+    model = genai.GenerativeModel("gemini-pro")  # You can also try gemini-1.5-flash
+    response = model.generate_content([system_prompt, user_prompt_for(website)])
+    return response.text
+
+# Function: Display summary nicely in notebook
+def display_summary(url):
+    summary = summarize(url)
+    display(Markdown(summary))
+
+# ✅ Get input from user
+user_url = input("Enter the website URL to summarize: ")
+display_summary(user_url)
